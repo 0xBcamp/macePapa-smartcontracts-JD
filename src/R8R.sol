@@ -1,18 +1,23 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-// install OZ contracts + import Ownable, ReentrancyGuard, IERC20
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 
-contract R8R {
+contract R8R is Ownable, ReentrancyGuard {
+    // =========================
     // === STORAGE VARIABLES ===
-    address public owner;
+    // =========================
+
     address public robot;
     uint256 public gameId;
+    uint256 public gameEntryPriceInEth;
 
     mapping(uint256 gameId => Game) games;
+
+    IERC20[] public gameTokensAllowedList; // list of ERC20 tokens users can use to enter the game
+    uint256[] public gameTokensEntryPriceList; // list of entry price for the ERC20 tokens
 
     struct Game {
         uint256 gameId;
@@ -23,21 +28,42 @@ contract R8R {
         uint256 winnerPayout;
     }
 
+    // ==============
     // === EVENTS ===
+    // ==============
+
     event GameCreated(uint256 gameId);
     event PlayerJoinedGameWithEth(address player, uint256 gameId);
-    event PlayerJoinedGameWithTokens();
+    event PlayerJoinedGameWithTokens(address player, uint256 gameId);
     event GameEnded();
 
+    // ==============
     // === ERRORS ===
+    // ==============
+    error Error__TokenTransferFailed();
 
+    // ===================
     // === CONSTRUCTOR ===
-    constructor(address _robot) {
-        owner = msg.sender;
+    // ===================
+
+    constructor(
+        address _robot,
+        uint256 _gameEntryPriceInEth,
+        IERC20[] memory _gameTokensAllowedList,
+        uint256[] memory _gameTokensEntryPriceList
+    ) Ownable(msg.sender) {
         robot = _robot;
+        gameEntryPriceInEth = _gameEntryPriceInEth;
+        gameTokensAllowedList = _gameTokensAllowedList;
+        gameTokensEntryPriceList = _gameTokensEntryPriceList;
     }
 
+    // =========================
     // === PUBLIC FUNCTIONS ====
+    // =========================
+
+    // @notice called by AI wallet to initialise a new game
+    // @notice creates a new Game struct that players + ratings can then be added to when they join
     function createGame() public onlyRobot {
         // increment gameId
         gameId = gameId + 1;
@@ -52,7 +78,7 @@ contract R8R {
             players: playersArray,
             playerRatings: playersRatingsArray,
             robotRating: 0,
-            winner: address(0), // set this to our treasury address upon game creation?
+            winner: address(0), // set this to our treasury address upon initial game creation??
             winnerPayout: 0
         });
 
@@ -63,10 +89,13 @@ contract R8R {
         emit GameCreated(gameId);
     }
 
-    function joinGameWithEth(uint256 _gameId, uint256 _playerRating) public payable {
+    // @notice allows new players to join a selected game
+    // @param user selects a _gameId to play & submits a rating between 1 - 100 for the image
+    function joinGameWithEth(uint256 _gameId, uint256 _playerRating) public payable nonReentrant {
         // Checks
         require(msg.value > 0, "Please send Eth to enter");
-        require(_gameId > 0, "Please select a game to enter");
+        require(msg.value == gameEntryPriceInEth, "Please send correct amount of Eth to enter");
+        require(_gameId > 0 && _gameId <= gameId, "Please select a game to enter");
         require(_playerRating > 0 && _playerRating < 101, "Please provide a rating of between 1 - 100");
 
         // Effects
@@ -80,21 +109,62 @@ contract R8R {
         emit PlayerJoinedGameWithEth(msg.sender, _gameId);
     }
 
-    function joinGameWithTokens(address _token, uint256 _amountOfToken, uint256 _gameId, uint256 _playerRating)
+    // @notice allows new players to join a selected game using ERC20 tokens
+    // @param players must pass in an amount of an allow-listed token along with their selected _gameId & image rating
+    function joinGameWithTokens(IERC20 _token, uint256 _amountOfToken, uint256 _gameId, uint256 _playerRating)
         public
-    {}
+        nonReentrant
+    {
+        // Checks
+        require(_amountOfToken > 0, "Please send a token amount of more than zero to enter");
+
+        // check that token is on the list of allowed tokens & get the entry price denominated in that token
+        bool tokenAllowed;
+        uint256 tokenEntryPrice;
+
+        for (uint256 i = 0; i < gameTokensAllowedList.length; i++) {
+            if (gameTokensAllowedList[i] == _token) {
+                tokenAllowed = true;
+                tokenEntryPrice = gameTokensEntryPriceList[i];
+            }
+        }
+
+        require(tokenAllowed == true, "Token sent is not allowed");
+
+        // check that the user has sent the correct price of entry in tokens
+        require(_amountOfToken == tokenEntryPrice, "Please send correct amount of tokens to enter");
+
+        require(_gameId > 0 && _gameId <= gameId, "Please select a game to enter");
+        require(_playerRating > 0 && _playerRating < 101, "Please provide a rating of between 1 - 100");
+
+        // Effects
+        // Add msg.sender to players array & _playerRating to playerRatings array
+        games[_gameId].players.push(msg.sender);
+        games[_gameId].playerRatings.push(_playerRating);
+
+        // Interactions
+        // transfer tokens from player to contract (EOA approval required beforehand)
+        bool success = _token.transferFrom(msg.sender, address(this), _amountOfToken);
+        if (success != true) {
+            Error__TokenTransferFailed;
+        }
+
+        // emit event
+        emit PlayerJoinedGameWithTokens(msg.sender, _gameId);
+    }
 
     function endGame(uint256 _robotRating) public onlyRobot {}
 
-    // === MODIFIERS ===
-
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Not owner");
-        _;
+    function addTokenToAllowedList(IERC20 _token) public onlyOwner {
+        gameTokensAllowedList.push(_token);
     }
 
+    // =================
+    // === MODIFIERS ===
+    // =================
+
     modifier onlyRobot() {
-        require(msg.sender == owner, "Not owner");
+        require(msg.sender == robot, "Only the AI can call this function");
         _;
     }
 }
