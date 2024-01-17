@@ -2,6 +2,9 @@
 pragma solidity ^0.8.13;
 
 // install OZ contracts + import Ownable, ReentrancyGuard, IERC20
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {IERC20} from "@openzeppelin/contracts/interfaces/IERC20.sol";
 
 contract R8R {
     // === STORAGE VARIABLES ===
