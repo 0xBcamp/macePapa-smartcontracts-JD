@@ -10,7 +10,7 @@ contract R8R is Ownable, ReentrancyGuard {
     // === STORAGE VARIABLES ===
     // =========================
 
-    address public robot;
+    address public ai;
     uint256 public gameId;
     uint256 public gameEntryPriceInEth;
 
@@ -23,9 +23,10 @@ contract R8R is Ownable, ReentrancyGuard {
         uint256 gameId;
         address[] players;
         uint256[] playerRatings;
-        uint256 robotRating;
+        uint256 aiRating;
         address winner;
         uint256 winnerPayout;
+        uint256 gameBalance;
     }
 
     // ==============
@@ -47,12 +48,12 @@ contract R8R is Ownable, ReentrancyGuard {
     // ===================
 
     constructor(
-        address _robot,
+        address _ai,
         uint256 _gameEntryPriceInEth,
         IERC20[] memory _gameTokensAllowedList,
         uint256[] memory _gameTokensEntryPriceList
     ) Ownable(msg.sender) {
-        robot = _robot;
+        ai = _ai;
         gameEntryPriceInEth = _gameEntryPriceInEth;
         gameTokensAllowedList = _gameTokensAllowedList;
         gameTokensEntryPriceList = _gameTokensEntryPriceList;
@@ -64,7 +65,7 @@ contract R8R is Ownable, ReentrancyGuard {
 
     // @notice called by AI wallet to initialise a new game
     // @notice creates a new Game struct that players + ratings can then be added to when they join
-    function createGame() public onlyRobot {
+    function createGame() public onlyAi {
         // increment gameId
         gameId = gameId + 1;
 
@@ -77,9 +78,10 @@ contract R8R is Ownable, ReentrancyGuard {
             gameId: gameId,
             players: playersArray,
             playerRatings: playersRatingsArray,
-            robotRating: 0,
+            aiRating: 0,
             winner: address(0), // set this to our treasury address upon initial game creation??
-            winnerPayout: 0
+            winnerPayout: 0,
+            gameBalance: 0
         });
 
         // add new game to game mappings indexed by gameId
@@ -102,6 +104,7 @@ contract R8R is Ownable, ReentrancyGuard {
         // Add msg.sender to players array & _playerRating to playerRatings array
         games[_gameId].players.push(msg.sender);
         games[_gameId].playerRatings.push(_playerRating);
+        games[_gameId].gameBalance += msg.value;
 
         // Interactions - none, Eth accepted into contract
 
@@ -153,7 +156,7 @@ contract R8R is Ownable, ReentrancyGuard {
         emit PlayerJoinedGameWithTokens(msg.sender, _gameId);
     }
 
-    function endGame(uint256 _robotRating) public onlyRobot {}
+    function endGame(uint256 _aiRating) public onlyAi {}
 
     function addTokenToAllowedList(IERC20 _token) public onlyOwner {
         gameTokensAllowedList.push(_token);
@@ -163,8 +166,8 @@ contract R8R is Ownable, ReentrancyGuard {
     // === MODIFIERS ===
     // =================
 
-    modifier onlyRobot() {
-        require(msg.sender == robot, "Only the AI can call this function");
+    modifier onlyAi() {
+        require(msg.sender == ai, "Only the AI can call this function");
         _;
     }
 }
