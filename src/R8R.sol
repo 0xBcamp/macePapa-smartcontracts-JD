@@ -42,6 +42,7 @@ contract R8R is Ownable, ReentrancyGuard {
     // === ERRORS ===
     // ==============
     error Error__TokenTransferFailed();
+    error Error__JoinWithEitherTokensOrEthNotBoth();
 
     // ===================
     // === CONSTRUCTOR ===
@@ -91,12 +92,35 @@ contract R8R is Ownable, ReentrancyGuard {
         emit GameCreated(gameId);
     }
 
+    // @notice generic public joinGame function that calls internal functions depending on whether player pays with Eth or ERC20s
+    function joinGame(IERC20 _token, uint256 _amountOfToken, uint256 _gameId, uint256 _playerRating)
+        public
+        payable
+        nonReentrant
+    {
+        if (msg.value > 0) {
+            _joinGameWithEth(_gameId, _playerRating);
+        } else if (_amountOfToken > 0) {
+            _joinGameWithTokens(_token, _amountOfToken, _gameId, _playerRating);
+        } else if (msg.value > 0 && _amountOfToken > 0) {
+            Error__JoinWithEitherTokensOrEthNotBoth;
+        } else {}
+    }
+
     // @notice allows new players to join a selected game
     // @param user selects a _gameId to play & submits a rating between 1 - 100 for the image
-    function joinGameWithEth(uint256 _gameId, uint256 _playerRating) public payable nonReentrant {
+    function _joinGameWithEth(uint256 _gameId, uint256 _playerRating) internal nonReentrant {
         // Checks
         require(msg.value > 0, "Please send Eth to enter");
-        require(msg.value == gameEntryPriceInEth, "Please send correct amount of Eth to enter");
+        require(msg.value >= gameEntryPriceInEth, "Please send correct amount of Eth to enter");
+
+        // transfer any overpaid Eth to player
+        if (msg.value > gameEntryPriceInEth) {
+            uint256 refundAmount = msg.value - gameEntryPriceInEth;
+            (bool sent,) = payable(msg.sender).call{value: refundAmount}("");
+            require(sent, "Failed to refund overpaid Ether");
+        }
+
         require(_gameId > 0 && _gameId <= gameId, "Please select a game to enter");
         require(_playerRating > 0 && _playerRating < 101, "Please provide a rating of between 1 - 100");
 
@@ -114,8 +138,8 @@ contract R8R is Ownable, ReentrancyGuard {
 
     // @notice allows new players to join a selected game using ERC20 tokens
     // @param players must pass in an amount of an allow-listed token along with their selected _gameId & image rating
-    function joinGameWithTokens(IERC20 _token, uint256 _amountOfToken, uint256 _gameId, uint256 _playerRating)
-        public
+    function _joinGameWithTokens(IERC20 _token, uint256 _amountOfToken, uint256 _gameId, uint256 _playerRating)
+        internal
         nonReentrant
     {
         // Checks
@@ -135,7 +159,13 @@ contract R8R is Ownable, ReentrancyGuard {
         require(tokenAllowed == true, "Token sent is not allowed");
 
         // check that the user has sent the correct price of entry in tokens
-        require(_amountOfToken == tokenEntryPrice, "Please send correct amount of tokens to enter");
+        require(_amountOfToken >= tokenEntryPrice, "Please send correct amount of tokens to enter");
+
+        // transfer any overpaid token amount to player
+        if (_amountOfToken > tokenEntryPrice) {
+            uint256 refundAmountInTokens = _amountOfToken - tokenEntryPrice;
+            _token.transfer(msg.sender, refundAmountInTokens);
+        }
 
         require(_gameId > 0 && _gameId <= gameId, "Please select a game to enter");
         require(_playerRating > 0 && _playerRating < 101, "Please provide a rating of between 1 - 100");
