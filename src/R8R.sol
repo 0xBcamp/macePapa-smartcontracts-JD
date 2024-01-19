@@ -22,11 +22,14 @@ contract R8R is Ownable, ReentrancyGuard {
 
     struct Game {
         uint256 gameId;
+        address[] playerKeys;
         mapping(address => uint256) playerAddressesToRatings;
+        uint256 numberOfPlayersInGame;
         uint256 aiRating;
-        address winner;
+        address[] winners;
         uint256 winnerPayout;
         uint256 gameBalance;
+        bool gameEnded;
     }
 
     // ==============
@@ -36,7 +39,8 @@ contract R8R is Ownable, ReentrancyGuard {
     event GameCreated(uint256 gameId, uint256 timestamp, uint256 prizePool);
     event PlayerJoinedGameWithEth(address player, uint256 gameId, uint256 playerRating);
     event PlayerJoinedGameWithTokens(address player, uint256 gameId, uint256 playerRating);
-    event GameEnded();
+    event GameEndedWithNoWinners();
+    event GameEndedWithWinner(address[] winners, uint256 payoutPerWinner);
 
     // ==============
     // === ERRORS ===
@@ -86,6 +90,8 @@ contract R8R is Ownable, ReentrancyGuard {
         payable
         nonReentrant
     {
+        require(games[_gameId].gameEnded == false, "The selected game has ended");
+
         if (msg.value > 0) {
             _joinGameWithEth(_gameId, _playerRating);
         } else if (_amountOfToken > 0) {
@@ -115,6 +121,8 @@ contract R8R is Ownable, ReentrancyGuard {
         // Effects
         games[_gameId].playerAddressesToRatings[msg.sender] = _playerRating; // Map player address to their rating within the selected game
         games[_gameId].gameBalance += msg.value;
+        games[_gameId].numberOfPlayersInGame += 1;
+        games[_gameId].playerKeys.push(msg.sender);
 
         // Interactions - none, Eth accepted into contract
 
@@ -159,6 +167,8 @@ contract R8R is Ownable, ReentrancyGuard {
         // Effects
         // Map player address to their rating within the selected game
         games[_gameId].playerAddressesToRatings[msg.sender] = _playerRating;
+        games[_gameId].numberOfPlayersInGame += 1;
+        games[_gameId].playerKeys.push(msg.sender);
 
         // Interactions
         // transfer tokens from player to contract (EOA approval required beforehand)
@@ -171,7 +181,34 @@ contract R8R is Ownable, ReentrancyGuard {
         emit PlayerJoinedGameWithTokens(msg.sender, _gameId, _playerRating);
     }
 
-    function endGame(uint256 _aiRating) public onlyAi {}
+    function endGame(uint256 _aiRating, uint256 _gameId) public onlyAi {
+        // set gameEnded to true so nobody else can join
+        games[_gameId].gameEnded = true;
+
+        // loop over player ratings and...
+        for (uint256 i = 0; i < games[_gameId].numberOfPlayersInGame; i++) {
+            // ...compare each player rating to the AI one
+            if (games[_gameId].playerAddressesToRatings[games[_gameId].playerKeys[i]] == _aiRating) {
+                // store any winners in the winners array
+                games[_gameId].winners[i] = games[_gameId].playerKeys[i];
+            } else {
+                emit GameEndedWithNoWinners();
+            }
+        }
+
+        require(games[_gameId].winners.length >= 1, "There were no winners of this game");
+
+        // prize pool / winners
+        uint256 payoutPerWinner = prizePool / games[_gameId].winners.length;
+
+        // send ether to winners
+        for (uint256 j = 0; j < games[_gameId].winners.length; j++) {
+            (bool sent,) = payable(games[_gameId].winners[j]).call{value: payoutPerWinner}("");
+            require(sent, "Payout to winner failed");
+        }
+
+        emit GameEndedWithWinner(games[_gameId].winners, payoutPerWinner);
+    }
 
     function addTokenToAllowedList(IERC20 _token) public onlyOwner {
         gameTokensAllowedList.push(_token);
