@@ -112,9 +112,7 @@ contract R8R is Ownable, ReentrancyGuard {
         require(_playerRating > 0 && _playerRating < 101, "Please provide a rating of between 1 - 100");
 
         // Effects
-        // Add msg.sender to players array & _playerRating to playerRatings array
-        // games[_gameId].players.push(msg.sender);
-        // games[_gameId].playerRatings.push(_playerRating);
+        games[_gameId].playerAddressesToRatings[msg.sender] = _playerRating; // Map player address to their rating within the selected game
         games[_gameId].gameBalance += msg.value;
 
         // Interactions - none, Eth accepted into contract
@@ -158,9 +156,8 @@ contract R8R is Ownable, ReentrancyGuard {
         require(_playerRating > 0 && _playerRating < 101, "Please provide a rating of between 1 - 100");
 
         // Effects
-        // Add msg.sender to players array & _playerRating to playerRatings array
-        // games[_gameId].players.push(msg.sender);
-        // games[_gameId].playerRatings.push(_playerRating);
+        // Map player address to their rating within the selected game
+        games[_gameId].playerAddressesToRatings[msg.sender] = _playerRating;
 
         // Interactions
         // transfer tokens from player to contract (EOA approval required beforehand)
