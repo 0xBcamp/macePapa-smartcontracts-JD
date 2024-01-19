@@ -21,8 +21,7 @@ contract R8R is Ownable, ReentrancyGuard {
 
     struct Game {
         uint256 gameId;
-        address[] players;
-        uint256[] playerRatings;
+        mapping(address => uint256) playerAddressesToRatings;
         uint256 aiRating;
         address winner;
         uint256 winnerPayout;
@@ -33,9 +32,9 @@ contract R8R is Ownable, ReentrancyGuard {
     // === EVENTS ===
     // ==============
 
-    event GameCreated(uint256 gameId);
-    event PlayerJoinedGameWithEth(address player, uint256 gameId);
-    event PlayerJoinedGameWithTokens(address player, uint256 gameId);
+    event GameCreated(uint256 gameId, uint256 timestamp);
+    event PlayerJoinedGameWithEth(address player, uint256 gameId, uint256 _playerRating);
+    event PlayerJoinedGameWithTokens(address player, uint256 gameId, uint256 _playerRating);
     event GameEnded();
 
     // ==============
@@ -70,26 +69,14 @@ contract R8R is Ownable, ReentrancyGuard {
         // increment gameId
         gameId = gameId + 1;
 
-        // empty placeholder arrays for players + their ratings (until someone joins the game)
-        address[] memory playersArray;
-        uint256[] memory playersRatingsArray;
-
         // create game
-        Game memory game = Game({
-            gameId: gameId,
-            players: playersArray,
-            playerRatings: playersRatingsArray,
-            aiRating: 0,
-            winner: address(0), // set this to our treasury address upon initial game creation??
-            winnerPayout: 0,
-            gameBalance: 0
-        });
+        Game storage game = games[gameId];
 
         // add new game to game mappings indexed by gameId
-        games[gameId] = game;
+        games[gameId].gameId = game.gameId;
 
         // emit event
-        emit GameCreated(gameId);
+        emit GameCreated(gameId, block.timestamp);
     }
 
     // @notice generic public joinGame function that calls internal functions depending on whether player pays with Eth or ERC20s
@@ -126,14 +113,14 @@ contract R8R is Ownable, ReentrancyGuard {
 
         // Effects
         // Add msg.sender to players array & _playerRating to playerRatings array
-        games[_gameId].players.push(msg.sender);
-        games[_gameId].playerRatings.push(_playerRating);
+        // games[_gameId].players.push(msg.sender);
+        // games[_gameId].playerRatings.push(_playerRating);
         games[_gameId].gameBalance += msg.value;
 
         // Interactions - none, Eth accepted into contract
 
         // emit event
-        emit PlayerJoinedGameWithEth(msg.sender, _gameId);
+        emit PlayerJoinedGameWithEth(msg.sender, _gameId, _playerRating);
     }
 
     // @notice allows new players to join a selected game using ERC20 tokens
@@ -172,8 +159,8 @@ contract R8R is Ownable, ReentrancyGuard {
 
         // Effects
         // Add msg.sender to players array & _playerRating to playerRatings array
-        games[_gameId].players.push(msg.sender);
-        games[_gameId].playerRatings.push(_playerRating);
+        // games[_gameId].players.push(msg.sender);
+        // games[_gameId].playerRatings.push(_playerRating);
 
         // Interactions
         // transfer tokens from player to contract (EOA approval required beforehand)
@@ -183,7 +170,7 @@ contract R8R is Ownable, ReentrancyGuard {
         }
 
         // emit event
-        emit PlayerJoinedGameWithTokens(msg.sender, _gameId);
+        emit PlayerJoinedGameWithTokens(msg.sender, _gameId, _playerRating);
     }
 
     function endGame(uint256 _aiRating) public onlyAi {}
