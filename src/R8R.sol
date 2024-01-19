@@ -13,6 +13,7 @@ contract R8R is Ownable, ReentrancyGuard {
     address public ai;
     uint256 public gameId;
     uint256 public gameEntryPriceInEth;
+    uint256 public prizePool = address(this).balance;
 
     mapping(uint256 gameId => Game) games;
 
@@ -32,9 +33,9 @@ contract R8R is Ownable, ReentrancyGuard {
     // === EVENTS ===
     // ==============
 
-    event GameCreated(uint256 gameId, uint256 timestamp);
-    event PlayerJoinedGameWithEth(address player, uint256 gameId, uint256 _playerRating);
-    event PlayerJoinedGameWithTokens(address player, uint256 gameId, uint256 _playerRating);
+    event GameCreated(uint256 gameId, uint256 timestamp, uint256 prizePool);
+    event PlayerJoinedGameWithEth(address player, uint256 gameId, uint256 playerRating);
+    event PlayerJoinedGameWithTokens(address player, uint256 gameId, uint256 playerRating);
     event GameEnded();
 
     // ==============
@@ -76,7 +77,7 @@ contract R8R is Ownable, ReentrancyGuard {
         games[gameId].gameId = game.gameId;
 
         // emit event
-        emit GameCreated(gameId, block.timestamp);
+        emit GameCreated(gameId, block.timestamp, prizePool);
     }
 
     // @notice generic public joinGame function that calls internal functions depending on whether player pays with Eth or ERC20s
