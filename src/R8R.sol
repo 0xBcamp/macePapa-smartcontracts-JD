@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import {ReentrancyGuard} from "lib/openzeppelin-contracts/contracts/utils/ReentrancyGuard.sol";
-import {Ownable} from "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
-import {IERC20} from "lib/openzeppelin-contracts/contracts/interfaces/IERC20.sol";
+import {ReentrancyGuard} from "@openzeppelin-contracts/utils/ReentrancyGuard.sol";
+import {Ownable} from "@openzeppelin-contracts/access/Ownable.sol";
+import {IERC20} from "@openzeppelin-contracts/interfaces/IERC20.sol";
 
 contract R8R is Ownable, ReentrancyGuard {
     // =========================
@@ -17,6 +17,8 @@ contract R8R is Ownable, ReentrancyGuard {
 
     mapping(uint256 gameId => Game) games;
 
+    // *** CHANGE TOKENALLOWLIST TO MAPPING ***
+    // *** mapping(IERC20 allowedToken => tokenEntryPrice) public gameTokensToEntryPrice;
     IERC20[] public gameTokensAllowedList; // list of ERC20 tokens users can use to enter the game
     uint256[] public gameTokensEntryPriceList; // list of entry price for the ERC20 tokens
 
@@ -36,11 +38,11 @@ contract R8R is Ownable, ReentrancyGuard {
     // === EVENTS ===
     // ==============
 
-    event GameCreated(uint256 gameId, uint256 timestamp, uint256 prizePool);
-    event PlayerJoinedGameWithEth(address player, uint256 gameId, uint256 playerRating);
-    event PlayerJoinedGameWithTokens(address player, uint256 gameId, uint256 playerRating);
-    event GameEndedWithNoWinners();
-    event GameEndedWithWinner(address[] winners, uint256 payoutPerWinner);
+    event GameCreated(uint256 indexed gameId, uint256 endTimestamp, uint256 gameEntryFee, uint256 prizePool);
+    // *** REFACTOR JOINEDGAMES TO ONE EVENT ***
+    // DONE!! event PlayerJoinedGame(address indexed player, uint256 indexed gameId, uint256 playerRating); <<< this, but fix in logic too
+    event PlayerJoinedGame(address indexed player, uint256 indexed gameId, uint256 playerRating, address token); // emit token address too (address(0) if they use ETH)
+    event GameEnded(address[] indexed winners, uint256 payoutPerWinner, uint256 indexed gameId);
 
     // ==============
     // === ERRORS ===
@@ -120,14 +122,15 @@ contract R8R is Ownable, ReentrancyGuard {
 
         // Effects
         games[_gameId].playerAddressesToRatings[msg.sender] = _playerRating; // Map player address to their rating within the selected game
-        games[_gameId].gameBalance += msg.value;
+        games[_gameId].gameBalance += msg.value; // calc value of msg.value - refund amount
         games[_gameId].numberOfPlayersInGame += 1;
         games[_gameId].playerKeys.push(msg.sender);
 
         // Interactions - none, Eth accepted into contract
 
         // emit event
-        emit PlayerJoinedGameWithEth(msg.sender, _gameId, _playerRating);
+        // *** CHANGE!! emit PlayerJoinedGame(msg.sender, _gameId, _playerRating, address(0)); <<< address(0) becuase NOT using tokens
+        emit PlayerJoinedGame(msg.sender, _gameId, _playerRating, address(0));
     }
 
     // @notice allows new players to join a selected game using ERC20 tokens
@@ -143,6 +146,7 @@ contract R8R is Ownable, ReentrancyGuard {
         bool tokenAllowed;
         uint256 tokenEntryPrice;
 
+        // *** CHANGE LOGIC!! token allow list is now a mapping > just get the price DIRECTLY using the _token address as the index
         for (uint256 i = 0; i < gameTokensAllowedList.length; i++) {
             if (gameTokensAllowedList[i] == _token) {
                 tokenAllowed = true;
@@ -156,6 +160,7 @@ contract R8R is Ownable, ReentrancyGuard {
         require(_amountOfToken >= tokenEntryPrice, "Please send correct amount of tokens to enter");
 
         // transfer any overpaid token amount to player
+        // *** CHANGE!! REFUND LOGIC NOT REQUIRED DUE TO EOA APPROVING CORRECT AMOUNT ***
         if (_amountOfToken > tokenEntryPrice) {
             uint256 refundAmountInTokens = _amountOfToken - tokenEntryPrice;
             _token.transfer(msg.sender, refundAmountInTokens);
@@ -169,6 +174,8 @@ contract R8R is Ownable, ReentrancyGuard {
         games[_gameId].playerAddressesToRatings[msg.sender] = _playerRating;
         games[_gameId].numberOfPlayersInGame += 1;
         games[_gameId].playerKeys.push(msg.sender);
+        // need to update the amount of tokens they've pad (no storage var for this yet)
+        // *** ACCOUNTING FOR ERC20S REQUIRED ***
 
         // Interactions
         // transfer tokens from player to contract (EOA approval required beforehand)
@@ -178,7 +185,7 @@ contract R8R is Ownable, ReentrancyGuard {
         }
 
         // emit event
-        emit PlayerJoinedGameWithTokens(msg.sender, _gameId, _playerRating);
+        emit PlayerJoinedGame(msg.sender, _gameId, _playerRating, _token);
     }
 
     function endGame(uint256 _aiRating, uint256 _gameId) public onlyAi {
@@ -192,10 +199,12 @@ contract R8R is Ownable, ReentrancyGuard {
                 // store any winners in the winners array
                 games[_gameId].winners[i] = games[_gameId].playerKeys[i];
             } else {
-                emit GameEndedWithNoWinners();
+                games[_gameId].winners[0] = address(0);
+                emit GameEnded(address(0), 0);
             }
         }
 
+        // *** NEED TO BE ABLE TO FINISH THE GAME CORRECTLY WITHOUT A WINNER ***
         require(games[_gameId].winners.length >= 1, "There were no winners of this game");
 
         // prize pool / winners
@@ -207,11 +216,21 @@ contract R8R is Ownable, ReentrancyGuard {
             require(sent, "Payout to winner failed");
         }
 
-        emit GameEndedWithWinner(games[_gameId].winners, payoutPerWinner);
+        emit GameEnded(games[_gameId].winners, payoutPerWinner);
     }
 
+    // *** ADD TOKEN PRICE TO TOKENPRICEARRAY TOO! ***
     function addTokenToAllowedList(IERC20 _token) public onlyOwner {
         gameTokensAllowedList.push(_token);
+    }
+
+    // *** SET GAME FEE SHOULD BE ONE FUNCTION THAT YOU CAN PASS IN EITHER THE TOKEN + PRICE, OR ETH PRICE ***
+    function setGameFee(address _token, uint256 _entryFee) public {
+
+    }
+
+    function getGameFee() public returns (uint256) {
+
     }
 
     // =================
