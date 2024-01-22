@@ -43,6 +43,7 @@ contract R8R is Ownable, ReentrancyGuard {
     // ==============
     error Error__TokenTransferFailed();
     error Error__JoinWithEitherTokensOrEthNotBoth();
+    error Error__GameFeeNotSet();
 
     // ===================
     // === CONSTRUCTOR ===
@@ -151,8 +152,7 @@ contract R8R is Ownable, ReentrancyGuard {
         games[_gameId].playerAddressesToRatings[msg.sender] = _playerRating;
         games[_gameId].numberOfPlayersInGame += 1;
         games[_gameId].playerKeys.push(msg.sender);
-        
-        // need to update the amount of tokens they've pad (no storage var for this yet)
+
         // *** ACCOUNTING FOR ERC20S REQUIRED ***
 
         // Interactions
@@ -177,13 +177,10 @@ contract R8R is Ownable, ReentrancyGuard {
                 // store any winners in the winners array
                 games[_gameId].winners[i] = games[_gameId].playerKeys[i];
             } else {
-                games[_gameId].winners[0] = address(0);
+                games[_gameId].winners[0] = address(0); // end game if no winners
                 emit GameEnded(address(0), 0);
             }
         }
-
-        // *** NEED TO BE ABLE TO FINISH THE GAME CORRECTLY WITHOUT A WINNER ***
-        require(games[_gameId].winners.length >= 1, "There were no winners of this game");
 
         // prize pool / winners
         uint256 payoutPerWinner = prizePool / games[_gameId].winners.length;
@@ -197,18 +194,28 @@ contract R8R is Ownable, ReentrancyGuard {
         emit GameEnded(games[_gameId].winners, payoutPerWinner);
     }
 
-    // *** ADD TOKEN PRICE TO TOKENPRICEARRAY TOO! ***
-    function addTokenToAllowedList(IERC20 _token) public onlyOwner {
-        gameTokensAllowedList.push(_token);
+    // @notice add token to allowed list with entry price in that token
+    function addTokenToAllowedList(IERC20 _token, uint256 _tokenEntryPrice) public onlyOwner {
+        gameTokensToEntryPrice[_token] = _tokenEntryPrice;
     }
 
-    // *** SET GAME FEE SHOULD BE ONE FUNCTION THAT YOU CAN PASS IN EITHER THE TOKEN + PRICE, OR ETH PRICE ***
-    function setGameFee(address _token, uint256 _entryFee) public onlyOwner {
-
+    function setGameFee(IERC20 _token, uint256 _tokenEntryPrice, uint256 _ethEntryPrice) public onlyOwner {
+            if(gameTokensToEntryPrice[_token] > 0) {
+                gameTokensToEntryPrice[_token] = _tokenEntryPrice;
+            } else if (_ethEntryPrice > 0) {
+                gameEntryPriceInEth = _ethEntryPrice;
+            } else {
+                Error__GameFeeNotSet;
+            }
     }
 
-    function getGameFee() public returns (uint256) {
-
+    function getGameFee(IERC20 _token, bool _getEthPrice) public returns (uint256) {
+        if(_getEthPrice == true) {
+            return gameEntryPriceInEth;
+        }
+        if(gameTokensToEntryPrice[_token] > 0) {
+            return gameTokensToEntryPrice[_token];
+        }
     }
 
     // =================
