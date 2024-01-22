@@ -19,8 +19,9 @@ contract R8R is Ownable, ReentrancyGuard {
 
     // *** CHANGE TOKENALLOWLIST TO MAPPING ***
     // *** mapping(IERC20 allowedToken => tokenEntryPrice) public gameTokensToEntryPrice;
-    IERC20[] public gameTokensAllowedList; // list of ERC20 tokens users can use to enter the game
-    uint256[] public gameTokensEntryPriceList; // list of entry price for the ERC20 tokens
+    mapping(IERC20 allowedToken => uint256 tokenEntryPrice) public gameTokensToEntryPrice;
+    // IERC20[] public gameTokensAllowedList; // list of ERC20 tokens users can use to enter the game
+    // uint256[] public gameTokensEntryPriceList; // list of entry price for the ERC20 tokens
 
     struct Game {
         uint256 gameId;
@@ -98,9 +99,9 @@ contract R8R is Ownable, ReentrancyGuard {
             _joinGameWithEth(_gameId, _playerRating);
         } else if (_amountOfToken > 0) {
             _joinGameWithTokens(_token, _amountOfToken, _gameId, _playerRating);
-        } else if (msg.value > 0 && _amountOfToken > 0) {
+        } else (msg.value > 0 && _amountOfToken > 0) {
             Error__JoinWithEitherTokensOrEthNotBoth;
-        } else {}
+        }
     }
 
     // @notice allows new players to join a selected game
@@ -146,13 +147,18 @@ contract R8R is Ownable, ReentrancyGuard {
         bool tokenAllowed;
         uint256 tokenEntryPrice;
 
-        // *** CHANGE LOGIC!! token allow list is now a mapping > just get the price DIRECTLY using the _token address as the index
-        for (uint256 i = 0; i < gameTokensAllowedList.length; i++) {
-            if (gameTokensAllowedList[i] == _token) {
-                tokenAllowed = true;
-                tokenEntryPrice = gameTokensEntryPriceList[i];
-            }
+        // *** DONE!! >>> CHANGE LOGIC!! token allow list is now a mapping > just get the price DIRECTLY using the _token address as the index
+        if(gameTokensToEntryPrice[_token] > 0) {
+            tokenAllowed = true;
+            tokenEntryPrice = gameTokensToEntryPrice[_token];
         }
+
+        // for (uint256 i = 0; i < gameTokensAllowedList.length; i++) {
+        //     if (gameTokensAllowedList[i] == _token) {
+        //         tokenAllowed = true;
+        //         tokenEntryPrice = gameTokensEntryPriceList[i];
+        //     }
+        // }
 
         require(tokenAllowed == true, "Token sent is not allowed");
 
@@ -161,10 +167,10 @@ contract R8R is Ownable, ReentrancyGuard {
 
         // transfer any overpaid token amount to player
         // *** CHANGE!! REFUND LOGIC NOT REQUIRED DUE TO EOA APPROVING CORRECT AMOUNT ***
-        if (_amountOfToken > tokenEntryPrice) {
-            uint256 refundAmountInTokens = _amountOfToken - tokenEntryPrice;
-            _token.transfer(msg.sender, refundAmountInTokens);
-        }
+        // if (_amountOfToken > tokenEntryPrice) {
+        //     uint256 refundAmountInTokens = _amountOfToken - tokenEntryPrice;
+        //     _token.transfer(msg.sender, refundAmountInTokens);
+        // }
 
         require(_gameId > 0 && _gameId <= gameId, "Please select a game to enter");
         require(_playerRating > 0 && _playerRating < 101, "Please provide a rating of between 1 - 100");
@@ -225,7 +231,7 @@ contract R8R is Ownable, ReentrancyGuard {
     }
 
     // *** SET GAME FEE SHOULD BE ONE FUNCTION THAT YOU CAN PASS IN EITHER THE TOKEN + PRICE, OR ETH PRICE ***
-    function setGameFee(address _token, uint256 _entryFee) public {
+    function setGameFee(address _token, uint256 _entryFee) public onlyOwner {
 
     }
 
