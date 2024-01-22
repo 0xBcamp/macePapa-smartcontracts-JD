@@ -16,12 +16,7 @@ contract R8R is Ownable, ReentrancyGuard {
     uint256 public prizePool = address(this).balance;
 
     mapping(uint256 gameId => Game) games;
-
-    // *** CHANGE TOKENALLOWLIST TO MAPPING ***
-    // *** mapping(IERC20 allowedToken => tokenEntryPrice) public gameTokensToEntryPrice;
     mapping(IERC20 allowedToken => uint256 tokenEntryPrice) public gameTokensToEntryPrice;
-    // IERC20[] public gameTokensAllowedList; // list of ERC20 tokens users can use to enter the game
-    // uint256[] public gameTokensEntryPriceList; // list of entry price for the ERC20 tokens
 
     struct Game {
         uint256 gameId;
@@ -40,9 +35,7 @@ contract R8R is Ownable, ReentrancyGuard {
     // ==============
 
     event GameCreated(uint256 indexed gameId, uint256 endTimestamp, uint256 gameEntryFee, uint256 prizePool);
-    // *** REFACTOR JOINEDGAMES TO ONE EVENT ***
-    // DONE!! event PlayerJoinedGame(address indexed player, uint256 indexed gameId, uint256 playerRating); <<< this, but fix in logic too
-    event PlayerJoinedGame(address indexed player, uint256 indexed gameId, uint256 playerRating, address token); // emit token address too (address(0) if they use ETH)
+    event PlayerJoinedGame(address indexed player, uint256 indexed gameId, uint256 playerRating, address token);
     event GameEnded(address[] indexed winners, uint256 payoutPerWinner, uint256 indexed gameId);
 
     // ==============
@@ -127,10 +120,7 @@ contract R8R is Ownable, ReentrancyGuard {
         games[_gameId].numberOfPlayersInGame += 1;
         games[_gameId].playerKeys.push(msg.sender);
 
-        // Interactions - none, Eth accepted into contract
-
         // emit event
-        // *** CHANGE!! emit PlayerJoinedGame(msg.sender, _gameId, _playerRating, address(0)); <<< address(0) becuase NOT using tokens
         emit PlayerJoinedGame(msg.sender, _gameId, _playerRating, address(0));
     }
 
@@ -147,39 +137,21 @@ contract R8R is Ownable, ReentrancyGuard {
         bool tokenAllowed;
         uint256 tokenEntryPrice;
 
-        // *** DONE!! >>> CHANGE LOGIC!! token allow list is now a mapping > just get the price DIRECTLY using the _token address as the index
         if(gameTokensToEntryPrice[_token] > 0) {
             tokenAllowed = true;
             tokenEntryPrice = gameTokensToEntryPrice[_token];
         }
 
-        // for (uint256 i = 0; i < gameTokensAllowedList.length; i++) {
-        //     if (gameTokensAllowedList[i] == _token) {
-        //         tokenAllowed = true;
-        //         tokenEntryPrice = gameTokensEntryPriceList[i];
-        //     }
-        // }
-
         require(tokenAllowed == true, "Token sent is not allowed");
-
-        // check that the user has sent the correct price of entry in tokens
         require(_amountOfToken >= tokenEntryPrice, "Please send correct amount of tokens to enter");
-
-        // transfer any overpaid token amount to player
-        // *** CHANGE!! REFUND LOGIC NOT REQUIRED DUE TO EOA APPROVING CORRECT AMOUNT ***
-        // if (_amountOfToken > tokenEntryPrice) {
-        //     uint256 refundAmountInTokens = _amountOfToken - tokenEntryPrice;
-        //     _token.transfer(msg.sender, refundAmountInTokens);
-        // }
-
         require(_gameId > 0 && _gameId <= gameId, "Please select a game to enter");
         require(_playerRating > 0 && _playerRating < 101, "Please provide a rating of between 1 - 100");
 
         // Effects
-        // Map player address to their rating within the selected game
         games[_gameId].playerAddressesToRatings[msg.sender] = _playerRating;
         games[_gameId].numberOfPlayersInGame += 1;
         games[_gameId].playerKeys.push(msg.sender);
+        
         // need to update the amount of tokens they've pad (no storage var for this yet)
         // *** ACCOUNTING FOR ERC20S REQUIRED ***
 
