@@ -94,7 +94,7 @@ contract R8R is Ownable, ReentrancyGuard {
 
     // @notice allows new players to join a selected game
     // @param user selects a _gameId to play & submits a rating between 1 - 100 for the image
-    function _joinGameWithEth(uint256 _gameId, uint256 _playerRating) internal nonReentrant {
+    function _joinGameWithEth(uint256 _gameId, uint256 _playerRating) internal {
         // Checks
         require(msg.value > 0, "Please send Eth to enter");
         require(msg.value >= gameEntryPriceInEth, "Please send correct amount of Eth to enter");
@@ -114,6 +114,7 @@ contract R8R is Ownable, ReentrancyGuard {
         games[_gameId].gameBalance += msg.value; // calc value of msg.value - refund amount
         games[_gameId].numberOfPlayersInGame += 1;
         games[_gameId].playerKeys.push(msg.sender);
+        prizePool += msg.value;
 
         // emit event
         emit PlayerJoinedGame(msg.sender, _gameId, _playerRating, address(0));
@@ -123,7 +124,6 @@ contract R8R is Ownable, ReentrancyGuard {
     // @param players must pass in an amount of an allow-listed token along with their selected _gameId & image rating
     function _joinGameWithTokens(IERC20 _token, uint256 _amountOfToken, uint256 _gameId, uint256 _playerRating)
         internal
-        nonReentrant
     {
         // Checks
         require(_amountOfToken > 0, "Please send a token amount of more than zero to enter");
@@ -178,6 +178,7 @@ contract R8R is Ownable, ReentrancyGuard {
 
         // prize pool / winners
         uint256 payoutPerWinner = prizePool / games[_gameId].winners.length;
+        prizePool = 0; // prizePool reset to zero after pot is won
 
         // send ether to winners
         for (uint256 j = 0; j < games[_gameId].winners.length; j++) {
