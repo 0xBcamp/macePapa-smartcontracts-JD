@@ -22,6 +22,7 @@ contract R8R is Ownable, ReentrancyGuard {
         uint256 gameId;
         address[] playerKeys;
         mapping(address => uint256) playerAddressesToRatings;
+        uint256 gameEntryFeeInEth;
         uint256 numberOfPlayersInGame;
         uint256 aiRating;
         address[] winners;
@@ -49,16 +50,9 @@ contract R8R is Ownable, ReentrancyGuard {
     // === CONSTRUCTOR ===
     // ===================
 
-    constructor(
-        address _ai,
-        uint256 _gameEntryPriceInEth,
-        IERC20[] memory _gameTokensAllowedList,
-        uint256[] memory _gameTokensEntryPriceList
-    ) Ownable(msg.sender) {
+    constructor(address _ai, uint256 _gameEntryPriceInEth) Ownable(msg.sender) {
         ai = _ai;
         gameEntryPriceInEth = _gameEntryPriceInEth;
-        gameTokensAllowedList = _gameTokensAllowedList;
-        gameTokensEntryPriceList = _gameTokensEntryPriceList;
     }
 
     // =========================
@@ -78,7 +72,7 @@ contract R8R is Ownable, ReentrancyGuard {
         games[gameId].gameId = game.gameId;
 
         // emit event
-        emit GameCreated(gameId, block.timestamp, prizePool);
+        emit GameCreated(gameId, block.timestamp, games[gameId].gameEntryFeeInEth, prizePool);
     }
 
     // @notice generic public joinGame function that calls internal functions depending on whether player pays with Eth or ERC20s
@@ -93,7 +87,7 @@ contract R8R is Ownable, ReentrancyGuard {
             _joinGameWithEth(_gameId, _playerRating);
         } else if (_amountOfToken > 0) {
             _joinGameWithTokens(_token, _amountOfToken, _gameId, _playerRating);
-        } else (msg.value > 0 && _amountOfToken > 0) {
+        } else if (msg.value > 0 && _amountOfToken > 0) {
             Error__JoinWithEitherTokensOrEthNotBoth;
         }
     }
@@ -138,7 +132,7 @@ contract R8R is Ownable, ReentrancyGuard {
         bool tokenAllowed;
         uint256 tokenEntryPrice;
 
-        if(gameTokensToEntryPrice[_token] > 0) {
+        if (gameTokensToEntryPrice[_token] > 0) {
             tokenAllowed = true;
             tokenEntryPrice = gameTokensToEntryPrice[_token];
         }
@@ -163,7 +157,7 @@ contract R8R is Ownable, ReentrancyGuard {
         }
 
         // emit event
-        emit PlayerJoinedGame(msg.sender, _gameId, _playerRating, _token);
+        emit PlayerJoinedGame(msg.sender, _gameId, _playerRating, address(_token));
     }
 
     function endGame(uint256 _aiRating, uint256 _gameId) public onlyAi {
@@ -178,7 +172,7 @@ contract R8R is Ownable, ReentrancyGuard {
                 games[_gameId].winners[i] = games[_gameId].playerKeys[i];
             } else {
                 games[_gameId].winners[0] = address(0); // end game if no winners
-                emit GameEnded(address(0), 0);
+                emit GameEnded(games[_gameId].winners, 0, _gameId);
             }
         }
 
@@ -191,7 +185,7 @@ contract R8R is Ownable, ReentrancyGuard {
             require(sent, "Payout to winner failed");
         }
 
-        emit GameEnded(games[_gameId].winners, payoutPerWinner);
+        emit GameEnded(games[_gameId].winners, payoutPerWinner, _gameId);
     }
 
     // @notice add token to allowed list with entry price in that token
@@ -200,20 +194,20 @@ contract R8R is Ownable, ReentrancyGuard {
     }
 
     function setGameFee(IERC20 _token, uint256 _tokenEntryPrice, uint256 _ethEntryPrice) public onlyOwner {
-            if(gameTokensToEntryPrice[_token] > 0) {
-                gameTokensToEntryPrice[_token] = _tokenEntryPrice;
-            } else if (_ethEntryPrice > 0) {
-                gameEntryPriceInEth = _ethEntryPrice;
-            } else {
-                Error__GameFeeNotSet;
-            }
+        if (gameTokensToEntryPrice[_token] > 0) {
+            gameTokensToEntryPrice[_token] = _tokenEntryPrice;
+        } else if (_ethEntryPrice > 0) {
+            gameEntryPriceInEth = _ethEntryPrice;
+        } else {
+            Error__GameFeeNotSet;
+        }
     }
 
-    function getGameFee(IERC20 _token, bool _getEthPrice) public returns (uint256) {
-        if(_getEthPrice == true) {
+    function getGameFee(IERC20 _token, bool _getEthPrice) public view returns (uint256) {
+        if (_getEthPrice == true) {
             return gameEntryPriceInEth;
         }
-        if(gameTokensToEntryPrice[_token] > 0) {
+        if (gameTokensToEntryPrice[_token] > 0) {
             return gameTokensToEntryPrice[_token];
         }
     }
