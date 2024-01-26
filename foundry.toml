@@ -2,10 +2,6 @@
 src = "src"
 out = "out"
 libs = ["lib"]
-<<<<<<< HEAD
 remappings = ["@openzeppelin-contracts/=lib/openzeppelin-contracts/contracts"]
-=======
-remappings = ["openzeppelin-contracts/=lib/openzeppelin-contracts/contracts"]
->>>>>>> 9189b408491004e3b45ea73613692df75bda426b
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
