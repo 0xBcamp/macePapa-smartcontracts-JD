@@ -9,17 +9,21 @@ contract R8RTest is Test {
     R8R public r8r;
     address public ai = makeAddr("ai");
     address public user = makeAddr("user");
-    uint256 public gameEntryPriceInEth = 1;
+    uint256 public gameEntryPriceInEth = 1e18;
     uint256 public STARTING_BALANCE = 10000;
     ERC20Mock public allowedTestToken;
 
     event GameCreated(uint256 indexed gameId, uint256 endTimestamp, uint256 gameEntryFee, uint256 prizePool);
+    event PlayerJoinedGame(address indexed player, uint256 indexed gameId, uint256 playerRating, address token);
 
     error Error__TokenTransferFailed();
 
     function setUp() public {
         r8r = new R8R(ai, gameEntryPriceInEth);
+        // deal Eth
         vm.deal(ai, STARTING_BALANCE);
+        vm.deal(user, STARTING_BALANCE);
+        // create & mint mock token
         allowedTestToken = new ERC20Mock();
         allowedTestToken.mint(address(this), 50e18);
         allowedTestToken.mint(user, 50e18);
@@ -136,6 +140,36 @@ contract R8RTest is Test {
         vm.startPrank(user);
         vm.expectRevert(R8R.Error__TokenTransferFailed.selector);
         r8r.joinGame(allowedTestToken, 4, 1, 35);
+        vm.stopPrank();
+    }
+
+    function testJoinGame_WithEth_ExpectEmitPlayerJoinedGame() public {
+        // create game first
+        vm.startPrank(ai);
+        r8r.createGame();
+        vm.stopPrank();
+
+        // join game as user
+        vm.startPrank(user);
+        vm.deal(user, 100e18);
+        // vm.expectRevert("Please send correct amount of Eth to enter");
+        vm.expectEmit(true, true, false, true);
+        emit PlayerJoinedGame(user, 1, 35, address(allowedTestToken));
+        r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 1, 35);
+        vm.stopPrank();
+    }
+
+    function testJoinGame_WithEth_ExpectRevertIfNotEnoughEth() public {
+        // create game first
+        vm.startPrank(ai);
+        r8r.createGame();
+        vm.stopPrank();
+
+        // join game as user
+        vm.startPrank(user);
+        vm.deal(user, 100e18);
+        vm.expectRevert("Please send correct amount of Eth to enter");
+        r8r.joinGame{value: 100000}(allowedTestToken, 0, 1, 35);
         vm.stopPrank();
     }
 }

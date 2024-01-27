@@ -81,14 +81,14 @@ contract R8R is Ownable, ReentrancyGuard {
         payable
         nonReentrant
     {
-        require(games[_gameId].gameEnded == false, "The selected game has ended");
+        // require(games[_gameId].gameEnded == false, "The selected game has ended");
 
         if (msg.value > 0) {
             _joinGameWithEth(_gameId, _playerRating);
         } else if (_amountOfToken > 0) {
             _joinGameWithTokens(_token, _amountOfToken, _gameId, _playerRating);
         } else if (msg.value > 0 && _amountOfToken > 0) {
-            Error__JoinWithEitherTokensOrEthNotBoth;
+            revert Error__JoinWithEitherTokensOrEthNotBoth();
         }
     }
 
