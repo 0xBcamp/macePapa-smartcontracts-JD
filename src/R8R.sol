@@ -84,7 +84,7 @@ contract R8R is Ownable, ReentrancyGuard {
         // require(games[_gameId].gameEnded == false, "The selected game has ended");
 
         if (msg.value > 0) {
-            _joinGameWithEth(_gameId, _playerRating);
+            _joinGameWithEth(_token, _gameId, _playerRating);
         } else if (_amountOfToken > 0) {
             _joinGameWithTokens(_token, _amountOfToken, _gameId, _playerRating);
         } else if (msg.value > 0 && _amountOfToken > 0) {
@@ -94,7 +94,7 @@ contract R8R is Ownable, ReentrancyGuard {
 
     // @notice allows new players to join a selected game
     // @param user selects a _gameId to play & submits a rating between 1 - 100 for the image
-    function _joinGameWithEth(uint256 _gameId, uint256 _playerRating) internal {
+    function _joinGameWithEth(IERC20 _token, uint256 _gameId, uint256 _playerRating) internal {
         // Checks
         require(msg.value > 0, "Please send Eth to enter");
         require(msg.value >= gameEntryPriceInEth, "Please send correct amount of Eth to enter");
@@ -117,7 +117,7 @@ contract R8R is Ownable, ReentrancyGuard {
         prizePool += msg.value;
 
         // emit event
-        emit PlayerJoinedGame(msg.sender, _gameId, _playerRating, address(0));
+        emit PlayerJoinedGame(msg.sender, _gameId, _playerRating, address(_token));
     }
 
     // @notice allows new players to join a selected game using ERC20 tokens

@@ -152,7 +152,6 @@ contract R8RTest is Test {
         // join game as user
         vm.startPrank(user);
         vm.deal(user, 100e18);
-        // vm.expectRevert("Please send correct amount of Eth to enter");
         vm.expectEmit(true, true, false, true);
         emit PlayerJoinedGame(user, 1, 35, address(allowedTestToken));
         r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 1, 35);
