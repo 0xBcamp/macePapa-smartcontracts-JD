@@ -15,6 +15,7 @@ contract R8RTest is Test {
 
     event GameCreated(uint256 indexed gameId, uint256 endTimestamp, uint256 gameEntryFee, uint256 prizePool);
     event PlayerJoinedGame(address indexed player, uint256 indexed gameId, uint256 playerRating, address token);
+    event GameEnded(address[] indexed winners, uint256 payoutPerWinner, uint256 indexed gameId);
 
     error Error__TokenTransferFailed();
 
@@ -60,6 +61,8 @@ contract R8RTest is Test {
     // =======================
     // === JOIN GAME TESTS ===
     // =======================
+
+    // === JOIN GAME WITH TOKENS TESTS ===
 
     function testJoinGame_WithTokens_ExpectRevertIfTokenNotAllowed() public {
         // create game first
@@ -143,6 +146,8 @@ contract R8RTest is Test {
         vm.stopPrank();
     }
 
+    // === JOIN GAME WITH ETH TESTS ===
+
     function testJoinGame_WithEth_ExpectEmitPlayerJoinedGame() public {
         // create game first
         vm.startPrank(ai);
@@ -169,6 +174,46 @@ contract R8RTest is Test {
         vm.deal(user, 100e18);
         vm.expectRevert("Please send correct amount of Eth to enter");
         r8r.joinGame{value: 100000}(allowedTestToken, 0, 1, 35);
+        vm.stopPrank();
+    }
+
+    // ======================
+    // === END GAME TESTS ===
+    // ======================
+
+    // test not passing - panic, out of bounds - REVISIT!
+    function testEndGame_EmitGameEnded() public {
+        _createGameAsAi();
+
+        address[] memory noWinners;
+        noWinners[0] = address(0);
+
+        // join game as user
+        vm.startPrank(ai);
+        vm.expectEmit(true, true, false, true);
+        emit GameEnded(noWinners, 0, 1);
+        r8r.endGame(1, 35);
+        vm.stopPrank();
+    }
+
+    // ============================
+    // === ADMIN FUNCTION TESTS ===
+    // ============================
+
+    function testAddTokenToAllowedList() public {
+        r8r.addTokenToAllowedList(allowedTestToken, 3);
+        uint256 tokenPrice = r8r.gameTokensToEntryPrice(allowedTestToken);
+        assertEq(tokenPrice, 3);
+    }
+
+    // ===============
+    // === HELPERS ===
+    // ===============
+
+    function _createGameAsAi() public {
+        // create game first
+        vm.startPrank(ai);
+        r8r.createGame();
         vm.stopPrank();
     }
 }
