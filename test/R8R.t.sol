@@ -18,6 +18,8 @@ contract R8RTest is Test {
     event GameEnded(address[] indexed winners, uint256 payoutPerWinner, uint256 indexed gameId);
 
     error Error__TokenTransferFailed();
+    error Error__PrizePoolIsEmpty();
+    error ERC20InsufficientAllowance(address, uint256, uint256);
 
     function setUp() public {
         r8r = new R8R(ai, gameEntryPriceInEth);
@@ -42,15 +44,14 @@ contract R8RTest is Test {
         vm.stopPrank();
     }
 
-    // this test isn't working correctly - REVISIT!
-    function testCreateGame_ExpectEmitGameCreated() public {
+    function testCreateGame_ExpectEmit_GameCreated() public {
         vm.startPrank(ai);
         r8r.createGame();
         emit GameCreated(1, block.timestamp, 1, 1);
         vm.stopPrank();
     }
 
-    function testCreateGame_ExpectRevertIfNotAiCaller() public {
+    function testCreateGame_ExpectRevert_IfNotAiCaller() public {
         address hacker = makeAddr("hacker");
         vm.startPrank(hacker);
         vm.expectRevert("Only the AI can call this function");
@@ -64,11 +65,8 @@ contract R8RTest is Test {
 
     // === JOIN GAME WITH TOKENS TESTS ===
 
-    function testJoinGame_WithTokens_ExpectRevertIfTokenNotAllowed() public {
-        // create game first
-        vm.startPrank(ai);
-        r8r.createGame();
-        vm.stopPrank();
+    function testJoinGame_WithTokens_ExpectRevert_IfTokenNotAllowed() public {
+        _createGameAsAi();
 
         // set up mock token for user to send
         ERC20Mock randToken = new ERC20Mock();
@@ -81,14 +79,11 @@ contract R8RTest is Test {
         vm.stopPrank();
     }
 
-    function testJoinGame_WithTokens_ExpectRevertIfNotEnoughTokensSent() public {
+    function testJoinGame_WithTokens_ExpectRevert_IfNotEnoughTokensSent() public {
         // owner adds token + price to allowed tokens
         r8r.addTokenToAllowedList(allowedTestToken, 3);
 
-        // create game first
-        vm.startPrank(ai);
-        r8r.createGame();
-        vm.stopPrank();
+        _createGameAsAi();
 
         // join game as user
         vm.startPrank(user);
@@ -97,14 +92,11 @@ contract R8RTest is Test {
         vm.stopPrank();
     }
 
-    function testJoinGame_WithTokens_ExpectRevertIfGameIdDoesNotExist() public {
+    function testJoinGame_WithTokens_ExpectRevert_IfGameIdDoesNotExist() public {
         // owner adds token + price to allowed tokens
         r8r.addTokenToAllowedList(allowedTestToken, 3);
 
-        // create game first
-        vm.startPrank(ai);
-        r8r.createGame();
-        vm.stopPrank();
+        _createGameAsAi();
 
         // join game as user
         vm.startPrank(user);
@@ -113,14 +105,11 @@ contract R8RTest is Test {
         vm.stopPrank();
     }
 
-    function testJoinGame_WithTokens_ExpectRevertIfRatingIsTooHigh() public {
+    function testJoinGame_WithTokens_ExpectRevert_IfRatingIsTooHigh() public {
         // owner adds token + price to allowed tokens
         r8r.addTokenToAllowedList(allowedTestToken, 3);
 
-        // create game first
-        vm.startPrank(ai);
-        r8r.createGame();
-        vm.stopPrank();
+        _createGameAsAi();
 
         // join game as user
         vm.startPrank(user);
@@ -129,30 +118,47 @@ contract R8RTest is Test {
         vm.stopPrank();
     }
 
-    // Test not passing - REVISIT!
-    function testJoinGame_WithTokens_ExpectErrorTokenTransferFailed() public {
+    function testJoinGame_WithTokens_ExpectError_ERC20InsufficientAllowance() public {
         // owner adds token + price to allowed tokens
         r8r.addTokenToAllowedList(allowedTestToken, 3);
 
-        // create game first
-        vm.startPrank(ai);
-        r8r.createGame();
-        vm.stopPrank();
+        _createGameAsAi();
 
         // join game as user
         vm.startPrank(user);
-        vm.expectRevert(R8R.Error__TokenTransferFailed.selector);
+        // vm.expectRevert(abi.encodeWithSelector(Error__TokenTransferFailed.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ERC20InsufficientAllowance.selector, 0x5615dEB798BB3E4dFa0139dFa1b3D433Cc23b72f, 0, 4
+            )
+        );
+        r8r.joinGame(allowedTestToken, 4, 1, 35);
+        vm.stopPrank();
+    }
+
+    // Test not passing - reverting with ERC20InsufficientAllowance from step before - REVISIT!
+    function testJoinGame_WithTokens_ExpectEmit_PlayerJoinedGame() public {
+        // owner adds token + price to allowed tokens
+        r8r.addTokenToAllowedList(allowedTestToken, 3);
+
+        _createGameAsAi();
+
+        // join game as user
+        vm.startPrank(user);
+
+        // approve contract to spend user's tokens
+        allowedTestToken.approve(address(r8r), 100);
+
+        vm.expectEmit(true, true, false, true);
+        emit PlayerJoinedGame(user, 1, 35, address(allowedTestToken));
         r8r.joinGame(allowedTestToken, 4, 1, 35);
         vm.stopPrank();
     }
 
     // === JOIN GAME WITH ETH TESTS ===
 
-    function testJoinGame_WithEth_ExpectEmitPlayerJoinedGame() public {
-        // create game first
-        vm.startPrank(ai);
-        r8r.createGame();
-        vm.stopPrank();
+    function testJoinGame_WithEth_ExpectEmit_PlayerJoinedGame() public {
+        _createGameAsAi();
 
         // join game as user
         vm.startPrank(user);
@@ -163,11 +169,8 @@ contract R8RTest is Test {
         vm.stopPrank();
     }
 
-    function testJoinGame_WithEth_ExpectRevertIfNotEnoughEth() public {
-        // create game first
-        vm.startPrank(ai);
-        r8r.createGame();
-        vm.stopPrank();
+    function testJoinGame_WithEth_ExpectRevert_IfNotEnoughEth() public {
+        _createGameAsAi();
 
         // join game as user
         vm.startPrank(user);
@@ -177,33 +180,153 @@ contract R8RTest is Test {
         vm.stopPrank();
     }
 
+    function testJoinGame_WithEth_GameVariablesShouldBeSet_OnePlayer() public {
+        _createGameAsAi();
+
+        // join game as user
+        vm.startPrank(user);
+        vm.deal(user, 100e18);
+        r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 1, 35);
+        vm.stopPrank();
+
+        uint256 testGameId = 1;
+
+        (
+            uint256 gameId,
+            // address[] memory playerKeys,
+            // mapping(address => uint256) memory playerAddressesToRatings,
+            uint256 gameEntryFeeInEth,
+            uint256 numberOfPlayersInGame,
+            uint256 aiRating,
+            // address[] memory winners,
+            uint256 winnerPayout,
+            uint256 gameBalance,
+            bool gameEnded
+        ) = r8r.games(testGameId);
+
+        assertEq(gameId, 1);
+        assertEq(gameEntryFeeInEth, 1e18);
+        assertEq(numberOfPlayersInGame, 1);
+        assertEq(aiRating, 0);
+        assertEq(winnerPayout, 0);
+        assertEq(gameBalance, 1e18);
+        assertEq(gameEnded, false);
+    }
+
+    function testJoinGame_WithEth_GameVariablesShouldBeSet_ThreePlayers() public {
+        _createGameAsAi();
+
+        // join game as user
+        vm.startPrank(user);
+        vm.deal(user, 100e18);
+        r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 1, 35);
+        vm.stopPrank();
+
+        // join game as bob
+        address bob = makeAddr("bob");
+        vm.startPrank(bob);
+        vm.deal(bob, 100e18);
+        r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 1, 35);
+        vm.stopPrank();
+
+        // join game as alice
+        address alice = makeAddr("alice");
+        vm.startPrank(alice);
+        vm.deal(alice, 100e18);
+        r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 1, 35);
+        vm.stopPrank();
+
+        uint256 testGameId = 1;
+
+        (
+            uint256 gameId,
+            // address[] memory playerKeys,
+            // mapping(address => uint256) memory playerAddressesToRatings,
+            uint256 gameEntryFeeInEth,
+            uint256 numberOfPlayersInGame,
+            uint256 aiRating,
+            // address[] memory winners,
+            uint256 winnerPayout,
+            uint256 gameBalance,
+            bool gameEnded
+        ) = r8r.games(testGameId);
+
+        assertEq(gameId, 1);
+        assertEq(gameEntryFeeInEth, 1e18);
+        assertEq(numberOfPlayersInGame, 3);
+        assertEq(aiRating, 0);
+        assertEq(winnerPayout, 0);
+        assertEq(gameBalance, 3e18);
+        assertEq(gameEnded, false);
+    }
+
     // ======================
     // === END GAME TESTS ===
     // ======================
 
-    // test not passing - panic, out of bounds - REVISIT!
-    function testEndGame_EmitGameEnded() public {
+    function testEndGame_ExpectRevert_IfPrizePoolIsEmpty() public {
         _createGameAsAi();
 
-        address[] memory noWinners;
+        address[] memory noWinners = new address[](1);
         noWinners[0] = address(0);
+
+        // join game as user
+        vm.startPrank(ai);
+        vm.expectRevert(abi.encodeWithSelector(Error__PrizePoolIsEmpty.selector));
+        r8r.endGame(1, 35);
+        vm.stopPrank();
+    }
+
+    // test not passing - panic, out of bounds array - REVISIT!
+    function testEndGame_ExpectEmit_GameEndedWithNoWinners() public {
+        _createGameAsAi();
+        _joinGameWithEth();
+
+        address[] memory noWinners = new address[](1);
+        noWinners[0] = user;
 
         // join game as user
         vm.startPrank(ai);
         vm.expectEmit(true, true, false, true);
         emit GameEnded(noWinners, 0, 1);
-        r8r.endGame(1, 35);
+        r8r.endGame(1, 64);
         vm.stopPrank();
     }
 
-    // ============================
-    // === ADMIN FUNCTION TESTS ===
-    // ============================
+    // ===============================
+    // === GETTERS & SETTERS TESTS ===
+    // ===============================
 
     function testAddTokenToAllowedList() public {
         r8r.addTokenToAllowedList(allowedTestToken, 3);
         uint256 tokenPrice = r8r.gameTokensToEntryPrice(allowedTestToken);
         assertEq(tokenPrice, 3);
+    }
+
+    function testSetGameFee_InTokens() public {
+        // set entry fee in both specified token & eth
+        r8r.addTokenToAllowedList(allowedTestToken, 3); // add token to allow list first
+        r8r.setGameFee(allowedTestToken, 7, 0); // set token entry fee
+        uint256 gameFeeInToken = r8r.getGameFee(allowedTestToken, false);
+        assertEq(gameFeeInToken, 7);
+    }
+
+    function testSetGameFee_InEth() public {
+        // set entry fee in both specified token & eth
+        r8r.setGameFee(allowedTestToken, 0, 4e18); // set eth entry fee
+        uint256 gameFeeInEth = r8r.getGameFee(allowedTestToken, true);
+        assertEq(gameFeeInEth, 4e18);
+    }
+
+    function testGetGameFee_InTokens() public {
+        r8r.addTokenToAllowedList(allowedTestToken, 5);
+        uint256 gameFeeInToken = r8r.getGameFee(allowedTestToken, false);
+        assertEq(gameFeeInToken, 5);
+    }
+
+    function testGetGameFee_InEth() public {
+        uint256 gameFeeInEth = r8r.getGameFee(allowedTestToken, true);
+        assertEq(gameFeeInEth, 1e18);
     }
 
     // ===============
@@ -214,6 +337,14 @@ contract R8RTest is Test {
         // create game first
         vm.startPrank(ai);
         r8r.createGame();
+        vm.stopPrank();
+    }
+
+    function _joinGameWithEth() public {
+        // join game as user, sending 2 eth
+        vm.startPrank(user);
+        vm.deal(user, 100e18);
+        r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 1, 35);
         vm.stopPrank();
     }
 }

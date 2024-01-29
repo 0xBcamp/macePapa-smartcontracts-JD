@@ -22,7 +22,7 @@ contract R8R is Ownable, ReentrancyGuard {
         uint256 gameId;
         address[] playerKeys;
         mapping(address => uint256) playerAddressesToRatings;
-        uint256 gameEntryFeeInEth;
+        uint256 gameEntryPriceInEth;
         uint256 numberOfPlayersInGame;
         uint256 aiRating;
         address[] winners;
@@ -45,6 +45,7 @@ contract R8R is Ownable, ReentrancyGuard {
     error Error__TokenTransferFailed();
     error Error__JoinWithEitherTokensOrEthNotBoth();
     error Error__GameFeeNotSet();
+    error Error__PrizePoolIsEmpty();
 
     // ===================
     // === CONSTRUCTOR ===
@@ -65,14 +66,12 @@ contract R8R is Ownable, ReentrancyGuard {
         // increment gameId
         gameId = gameId + 1;
 
-        // create game
-        Game storage game = games[gameId];
-
         // add new game to game mappings indexed by gameId
-        games[gameId].gameId = game.gameId;
+        games[gameId].gameId = gameId;
+        games[gameId].gameEntryPriceInEth = gameEntryPriceInEth;
 
         // emit event
-        emit GameCreated(gameId, block.timestamp, games[gameId].gameEntryFeeInEth, prizePool);
+        emit GameCreated(gameId, block.timestamp, games[gameId].gameEntryPriceInEth, prizePool);
     }
 
     // @notice generic public joinGame function that calls internal functions depending on whether player pays with Eth or ERC20s
@@ -99,22 +98,26 @@ contract R8R is Ownable, ReentrancyGuard {
         require(msg.value > 0, "Please send Eth to enter");
         require(msg.value >= gameEntryPriceInEth, "Please send correct amount of Eth to enter");
 
+        uint256 refundAmount = 0;
+
         // transfer any overpaid Eth to player
         if (msg.value > gameEntryPriceInEth) {
-            uint256 refundAmount = msg.value - gameEntryPriceInEth;
+            refundAmount = msg.value - gameEntryPriceInEth;
             (bool sent,) = payable(msg.sender).call{value: refundAmount}("");
             require(sent, "Failed to refund overpaid Ether");
         }
+
+        uint256 ethValueSentMinusRefund = (msg.value - refundAmount);
 
         require(_gameId > 0 && _gameId <= gameId, "Please select a game to enter");
         require(_playerRating > 0 && _playerRating < 101, "Please provide a rating of between 1 - 100");
 
         // Effects
         games[_gameId].playerAddressesToRatings[msg.sender] = _playerRating; // Map player address to their rating within the selected game
-        games[_gameId].gameBalance += msg.value; // calc value of msg.value - refund amount
+        games[_gameId].gameBalance += ethValueSentMinusRefund; // calc value of msg.value - refund amount
         games[_gameId].numberOfPlayersInGame += 1;
         games[_gameId].playerKeys.push(msg.sender);
-        prizePool += msg.value;
+        prizePool += ethValueSentMinusRefund;
 
         // emit event
         emit PlayerJoinedGame(msg.sender, _gameId, _playerRating, address(_token));
@@ -160,7 +163,7 @@ contract R8R is Ownable, ReentrancyGuard {
         emit PlayerJoinedGame(msg.sender, _gameId, _playerRating, address(_token));
     }
 
-    function endGame(uint256 _aiRating, uint256 _gameId) public onlyAi {
+    function endGame(uint256 _gameId, uint256 _aiRating) public onlyAi {
         // set gameEnded to true so nobody else can join
         games[_gameId].gameEnded = true;
 
@@ -177,7 +180,10 @@ contract R8R is Ownable, ReentrancyGuard {
         }
 
         // prize pool / winners
-        uint256 payoutPerWinner = prizePool / games[_gameId].winners.length;
+        if (prizePool == 0) {
+            revert Error__PrizePoolIsEmpty();
+        }
+        uint256 payoutPerWinner = prizePool / 1; // games[_gameId].winners.length;
         prizePool = 0; // prizePool reset to zero after pot is won
 
         // send ether to winners
@@ -200,7 +206,7 @@ contract R8R is Ownable, ReentrancyGuard {
         } else if (_ethEntryPrice > 0) {
             gameEntryPriceInEth = _ethEntryPrice;
         } else {
-            Error__GameFeeNotSet;
+            revert Error__GameFeeNotSet();
         }
     }
 
