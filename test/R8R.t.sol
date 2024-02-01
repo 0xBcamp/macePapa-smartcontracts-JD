@@ -9,6 +9,7 @@ contract R8RTest is Test {
     R8R public r8r;
     address public ai = makeAddr("ai");
     address public user = makeAddr("user");
+    address public mary = makeAddr("mary");
     uint256 public gameEntryPriceInEth = 1e18;
     uint256 public STARTING_BALANCE = 10000;
     ERC20Mock public allowedTestToken;
@@ -16,6 +17,7 @@ contract R8RTest is Test {
     event GameCreated(uint256 indexed gameId, uint256 endTimestamp, uint256 gameEntryFee, uint256 prizePool);
     event PlayerJoinedGame(address indexed player, uint256 indexed gameId, uint256 playerRating, address token);
     event GameEnded(address[] indexed winners, uint256 payoutPerWinner, uint256 indexed gameId);
+    event GameEndedTest(address indexed winners, uint256 payoutPerWinner, uint256 indexed gameId);
 
     error Error__TokenTransferFailed();
     error Error__PrizePoolIsEmpty();
@@ -26,6 +28,7 @@ contract R8RTest is Test {
         // deal Eth
         vm.deal(ai, STARTING_BALANCE);
         vm.deal(user, STARTING_BALANCE);
+        vm.deal(mary, STARTING_BALANCE);
         // create & mint mock token
         allowedTestToken = new ERC20Mock();
         allowedTestToken.mint(address(this), 50e18);
@@ -267,9 +270,6 @@ contract R8RTest is Test {
     function testEndGame_ExpectRevert_IfPrizePoolIsEmpty() public {
         _createGameAsAi();
 
-        address[] memory noWinners = new address[](1);
-        noWinners[0] = address(0);
-
         // join game as user
         vm.startPrank(ai);
         vm.expectRevert(abi.encodeWithSelector(Error__PrizePoolIsEmpty.selector));
@@ -280,16 +280,50 @@ contract R8RTest is Test {
     // test not passing - panic, out of bounds array - REVISIT!
     function testEndGame_ExpectEmit_GameEndedWithNoWinners() public {
         _createGameAsAi();
-        _joinGameWithEth();
+        _joinGameWithEth(); // _joinGameWithEth joins as user with a rating prediction of 35
 
         address[] memory noWinners = new address[](1);
-        noWinners[0] = user;
+        noWinners[0] = address(0);
 
-        // join game as user
         vm.startPrank(ai);
         vm.expectEmit(true, true, false, true);
         emit GameEnded(noWinners, 0, 1);
-        r8r.endGame(1, 64);
+        r8r.endGame(1, 64); // AI predicts 64, user predicted 35
+        vm.stopPrank();
+    }
+
+    function testEndGame_ExpectEmit_GameEndedWithWinner() public {
+        _createGameAsAi();
+        _joinGameWithEth(); // _joinGameWithEth joins as user with a rating prediction of 35
+
+        address[] memory userIsWinner = new address[](1);
+        userIsWinner[0] = user;
+
+        vm.startPrank(ai);
+        vm.expectEmit(true, true, false, true);
+        emit GameEnded(userIsWinner, 1e18, 1);
+        r8r.endGame(1, 35); // 35 == same score as user predicted
+        vm.stopPrank();
+    }
+
+    function testEndGame_ExpectEmit_GameEndedWithTwoWinners() public {
+        _createGameAsAi();
+        _joinGameWithEth(); // _joinGameWithEth joins as user with a rating prediction of 35
+
+        // join game as Mary, sending 2 eth
+        vm.startPrank(mary);
+        vm.deal(mary, 100e18);
+        r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 1, 35); // mary joins the game with a prediction of 35 also
+        vm.stopPrank();
+
+        address[] memory winners = new address[](2);
+        winners[0] = user;
+        winners[1] = mary;
+
+        vm.startPrank(ai);
+        vm.expectEmit(true, true, false, true);
+        emit GameEnded(winners, 1e18, 1);
+        r8r.endGame(1, 35); // 35 == same score as user predicted
         vm.stopPrank();
     }
 
