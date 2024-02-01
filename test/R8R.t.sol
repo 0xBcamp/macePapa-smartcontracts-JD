@@ -2,6 +2,7 @@
 pragma solidity ^0.8.13;
 
 import {Test, console2} from "forge-std/Test.sol";
+import "forge-std/console.sol";
 import {R8R} from "../src/R8R.sol";
 import {ERC20Mock} from "lib/openzeppelin-contracts/contracts/mocks/token/ERC20Mock.sol";
 
@@ -39,6 +40,7 @@ contract R8RTest is Test {
     // === CREATE GAME TESTS ===
     // =========================
 
+    // TODO: Create test for createGame() function to assert all values assigned and object created
     function testCreateGame_GameIdIncremented() public {
         vm.startPrank(ai);
         r8r.createGame();
