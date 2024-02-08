@@ -16,7 +16,6 @@ contract R8R is Ownable, ReentrancyGuard {
     uint256 public prizePool = address(this).balance;
 
     mapping(uint256 gameId => Game) public games;
-    // TODO: If you have time, maybe test the difference between IERC20 and address
     mapping(IERC20 allowedToken => uint256 tokenEntryPrice) public gameTokensToEntryPrice;
 
     struct Game {
@@ -53,7 +52,6 @@ contract R8R is Ownable, ReentrancyGuard {
     // === CONSTRUCTOR ===
     // ===================
 
-    // TODO: Remove gameEntryPriceInEth from constructor
     constructor(address _ai, uint256 _gameEntryPriceInEth) Ownable(msg.sender) {
         ai = _ai;
         gameEntryPriceInEth = _gameEntryPriceInEth;
@@ -72,8 +70,10 @@ contract R8R is Ownable, ReentrancyGuard {
         // add new game to game mappings indexed by gameId
         games[gameId].gameId = gameId;
         games[gameId].gameEntryPriceInEth = gameEntryPriceInEth;
+        uint256 endTimestamp = (block.timestamp + 600);
+
         // emit event
-        emit GameCreated(gameId, block.timestamp, games[gameId].gameEntryPriceInEth, prizePool);
+        emit GameCreated(gameId, endTimestamp, games[gameId].gameEntryPriceInEth, prizePool);
     }
 
     // @notice generic public joinGame function that calls internal functions depending on whether player pays with Eth or ERC20s
@@ -197,13 +197,11 @@ contract R8R is Ownable, ReentrancyGuard {
         emit GameEnded(games[_gameId].winners, payoutPerWinner, _gameId);
     }
 
-    // TODO: Make this internal, create another function with same name, external, that accepts arrays, then loop through arrays and call this function
     // @notice add token to allowed list with entry price in that token
     function addTokenToAllowedList(IERC20 _token, uint256 _tokenEntryPrice) public onlyOwner {
         gameTokensToEntryPrice[_token] = _tokenEntryPrice;
     }
 
-    // TODO: Remove
     function setGameFee(IERC20 _token, uint256 _tokenEntryPrice, uint256 _ethEntryPrice) public onlyOwner {
         if (gameTokensToEntryPrice[_token] > 0) {
             gameTokensToEntryPrice[_token] = _tokenEntryPrice;
@@ -214,7 +212,6 @@ contract R8R is Ownable, ReentrancyGuard {
         }
     }
 
-    // TODO: Refactor to fit new logic
     function getGameFee(IERC20 _token, bool _getEthPrice) public view returns (uint256 price) {
         if (_getEthPrice == true) {
             return gameEntryPriceInEth;

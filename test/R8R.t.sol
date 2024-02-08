@@ -2,7 +2,6 @@
 pragma solidity ^0.8.13;
 
 import {Test, console2} from "forge-std/Test.sol";
-import "forge-std/console.sol";
 import {R8R} from "../src/R8R.sol";
 import {ERC20Mock} from "lib/openzeppelin-contracts/contracts/mocks/token/ERC20Mock.sol";
 
@@ -40,7 +39,6 @@ contract R8RTest is Test {
     // === CREATE GAME TESTS ===
     // =========================
 
-    // TODO: Create test for createGame() function to assert all values assigned and object created
     function testCreateGame_GameIdIncremented() public {
         vm.startPrank(ai);
         r8r.createGame();
@@ -51,8 +49,9 @@ contract R8RTest is Test {
 
     function testCreateGame_ExpectEmit_GameCreated() public {
         vm.startPrank(ai);
+        vm.expectEmit(true, true, false, true);
+        emit GameCreated(1, (block.timestamp + 600), 1e18, 0);
         r8r.createGame();
-        emit GameCreated(1, block.timestamp, 1, 1);
         vm.stopPrank();
     }
 
@@ -218,6 +217,34 @@ contract R8RTest is Test {
         assertEq(gameEnded, false);
     }
 
+    function testJoinGame_WithEth_PlayerCanJoinMultipleGames() public {
+        _createGameAsAi(); // create Game 1
+        _createGameAsAi(); // create Game 2
+
+        // join Game 1 as user
+        vm.startPrank(user);
+        vm.deal(user, 100e18);
+        r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 1, 35);
+        vm.stopPrank();
+
+        // join Game 2 as user
+        vm.startPrank(user);
+        vm.deal(user, 100e18);
+        r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 2, 78);
+        vm.stopPrank();
+
+        uint256 testGameId1 = 1;
+        uint256 testGameId2 = 2;
+
+        (,, uint256 numberOfPlayersInGame1,,,,) = r8r.games(testGameId1);
+        (,, uint256 numberOfPlayersInGame2,,,,) = r8r.games(testGameId2);
+
+        assertEq(testGameId1, 1);
+        assertEq(numberOfPlayersInGame1, 1);
+        assertEq(testGameId2, 2);
+        assertEq(numberOfPlayersInGame2, 1);
+    }
+
     function testJoinGame_WithEth_GameVariablesShouldBeSet_ThreePlayers() public {
         _createGameAsAi();
 
@@ -279,7 +306,6 @@ contract R8RTest is Test {
         vm.stopPrank();
     }
 
-    // test not passing - panic, out of bounds array - REVISIT!
     function testEndGame_ExpectEmit_GameEndedWithNoWinners() public {
         _createGameAsAi();
         _joinGameWithEth(); // _joinGameWithEth joins as user with a rating prediction of 35
