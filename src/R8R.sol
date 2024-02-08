@@ -67,13 +67,18 @@ contract R8R is Ownable, ReentrancyGuard {
         // increment gameId
         gameId = gameId + 1;
 
+        // Create new Game struct
+        Game storage game = games[gameId];
+
         // add new game to game mappings indexed by gameId
-        games[gameId].gameId = gameId;
-        games[gameId].gameEntryPriceInEth = gameEntryPriceInEth;
+        game.gameEntryPriceInEth = gameEntryPriceInEth;
+        game.gameId = gameId;
+        game.gameEntryPriceInEth = 1e18;
         uint256 endTimestamp = (block.timestamp + 600);
+        game.playerAddressesToRatings;
 
         // emit event
-        emit GameCreated(gameId, endTimestamp, games[gameId].gameEntryPriceInEth, prizePool);
+        emit GameCreated(game.gameId, endTimestamp, game.gameEntryPriceInEth, prizePool);
     }
 
     // @notice generic public joinGame function that calls internal functions depending on whether player pays with Eth or ERC20s
@@ -197,6 +202,10 @@ contract R8R is Ownable, ReentrancyGuard {
         emit GameEnded(games[_gameId].winners, payoutPerWinner, _gameId);
     }
 
+    // =========================
+    // === GETTERS / SETTERS ===
+    // =========================
+
     // @notice add token to allowed list with entry price in that token
     function addTokenToAllowedList(IERC20 _token, uint256 _tokenEntryPrice) public onlyOwner {
         gameTokensToEntryPrice[_token] = _tokenEntryPrice;
@@ -219,6 +228,16 @@ contract R8R is Ownable, ReentrancyGuard {
         if (gameTokensToEntryPrice[_token] > 0) {
             return gameTokensToEntryPrice[_token];
         }
+    }
+
+    function getRatingFromPlayerAddress(uint256 _gameId, address _player) public view returns (uint256 playerRating) {
+        Game storage game = games[_gameId];
+        return game.playerAddressesToRatings[_player];
+    }
+
+    function getWinnersFromGameId(uint256 _gameId) public view returns (address[] memory winners) {
+        Game storage game = games[_gameId];
+        return game.winners;
     }
 
     // =================

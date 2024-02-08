@@ -217,6 +217,22 @@ contract R8RTest is Test {
         assertEq(gameEnded, false);
     }
 
+    function testJoinGame_WithEth_PlayerRatingShouldBeSetInGameStructMapping() public {
+        _createGameAsAi();
+
+        // join game as user
+        vm.startPrank(user);
+        vm.deal(user, 100e18);
+        r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 1, 35);
+        vm.stopPrank();
+
+        uint256 testGameId = 1;
+
+        uint256 playerRating = r8r.getRatingFromPlayerAddress(testGameId, user);
+
+        assertEq(playerRating, 35);
+    }
+
     function testJoinGame_WithEth_PlayerCanJoinMultipleGames() public {
         _createGameAsAi(); // create Game 1
         _createGameAsAi(); // create Game 2
@@ -399,6 +415,34 @@ contract R8RTest is Test {
         emit GameEnded(winners, 1e18, 1);
         r8r.endGame(1, 35); // 35 == same score as user predicted
         vm.stopPrank();
+    }
+
+    function testEndGame_ExpectEmit_GameEndedWithTwoWinners_CheckAddresses() public {
+        _createGameAsAi();
+        _joinGameWithEth(); // _joinGameWithEth joins as user with a rating prediction of 35
+
+        // join game as Mary, sending 2 eth
+        vm.startPrank(mary);
+        vm.deal(mary, 100e18);
+        r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 1, 35); // mary joins the game with a prediction of 35 also
+        vm.stopPrank();
+
+        // end game
+        vm.startPrank(ai);
+        r8r.endGame(1, 35); // 35 == same score as user predicted
+        vm.stopPrank();
+
+        // memory array to use in assertion below
+        address[] memory winners = new address[](2);
+        winners[0] = user;
+        winners[1] = mary;
+
+        // get the winners from the contract
+        address[] memory winnersArray = r8r.getWinnersFromGameId(1);
+
+        // assert that the array of winners created here == the array of winners returned from the contract
+        assertEq(winnersArray[0], winners[0]);
+        assertEq(winnersArray[1], winners[1]);
     }
 
     // ===============================
