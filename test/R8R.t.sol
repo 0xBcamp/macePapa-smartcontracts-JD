@@ -245,6 +245,52 @@ contract R8RTest is Test {
         assertEq(numberOfPlayersInGame2, 1);
     }
 
+    function testJoinGame_WithEth_MultiplePlayersCanJoinMultipleGames() public {
+        _createGameAsAi(); // create Game 1
+        _createGameAsAi(); // create Game 2
+        _createGameAsAi(); // create Game 3
+        _createGameAsAi(); // create Game 4
+
+        // join Games 1, 2 and 3 as 'user'
+        vm.startPrank(user);
+        vm.deal(user, 100e18);
+        r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 1, 35);
+        r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 2, 78);
+        r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 3, 23);
+        vm.stopPrank();
+
+        // join Games 2, 3 and 4 as 'mary'
+        vm.startPrank(mary);
+        vm.deal(mary, 100e18);
+        r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 2, 91);
+        r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 3, 14);
+        r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 4, 49);
+        vm.stopPrank();
+
+        uint256 testGameId1 = 1;
+        uint256 testGameId2 = 2;
+        uint256 testGameId3 = 3;
+        uint256 testGameId4 = 4;
+
+        (,, uint256 numberOfPlayersInGame1,,,,) = r8r.games(testGameId1);
+        (,, uint256 numberOfPlayersInGame2,,,,) = r8r.games(testGameId2);
+        (,, uint256 numberOfPlayersInGame3,,,,) = r8r.games(testGameId3);
+        (,, uint256 numberOfPlayersInGame4,,,,) = r8r.games(testGameId4);
+
+        // Game 1 == 1 player
+        assertEq(testGameId1, 1);
+        assertEq(numberOfPlayersInGame1, 1);
+        // Game 2 == 2 players
+        assertEq(testGameId2, 2);
+        assertEq(numberOfPlayersInGame2, 2);
+        // Game 3 == 2 players
+        assertEq(testGameId3, 3);
+        assertEq(numberOfPlayersInGame3, 2);
+        // Game 4 == 1 player
+        assertEq(testGameId4, 4);
+        assertEq(numberOfPlayersInGame4, 1);
+    }
+
     function testJoinGame_WithEth_GameVariablesShouldBeSet_ThreePlayers() public {
         _createGameAsAi();
 
