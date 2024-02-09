@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Test, console2} from "forge-std/Test.sol";
+import {Test, console2} from "lib/forge-std/src/Test.sol";
 import {R8R} from "../src/R8R.sol";
 import {ERC20Mock} from "lib/openzeppelin-contracts/contracts/mocks/token/ERC20Mock.sol";
 
@@ -417,15 +417,10 @@ contract R8RTest is Test {
         vm.stopPrank();
     }
 
-    function testEndGame_ExpectEmit_GameEndedWithTwoWinners_CheckAddresses() public {
+    function testEndGame_GameEndedWithTwoWinners_CheckWinnerAddressesAreCorrect() public {
         _createGameAsAi();
         _joinGameWithEth(); // _joinGameWithEth joins as user with a rating prediction of 35
-
-        // join game as Mary, sending 2 eth
-        vm.startPrank(mary);
-        vm.deal(mary, 100e18);
-        r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 1, 35); // mary joins the game with a prediction of 35 also
-        vm.stopPrank();
+        _joinGameWithEthAsMary(); // _joinGameWithEthAsMary joins as mary with a rating prediction of 35
 
         // end game
         vm.startPrank(ai);
@@ -443,6 +438,26 @@ contract R8RTest is Test {
         // assert that the array of winners created here == the array of winners returned from the contract
         assertEq(winnersArray[0], winners[0]);
         assertEq(winnersArray[1], winners[1]);
+    }
+
+    function testEndGame_endMultipleGamesWithWinners() public {
+        _createGameAsAi(); // gameId == 1
+        _createGameAsAi(); // gameId == 2
+        _createGameAsAi(); // gameId == 3
+
+        _joinGameWithEthAsMary();
+        _joinGameAsPlayerWithRating(1, user, 89);
+        _joinGameAsPlayerWithRating(2, user, 56);
+        _joinGameAsPlayerWithRating(3, user, 12);
+        _joinGameAsPlayerWithRating(2, mary, 42);
+        _joinGameAsPlayerWithRating(3, mary, 7);
+
+        // end games
+        // _endGameWithRating(1, 77); // no winner
+        // _endGameWithRating(2, 42); // mary wins
+        _endGameWithRating(3, 12); // user wins
+
+        assertEq(89, r8r.getRatingFromPlayerAddress(1, user));
     }
 
     // ===============================
@@ -497,6 +512,26 @@ contract R8RTest is Test {
         vm.startPrank(user);
         vm.deal(user, 100e18);
         r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 1, 35);
+        vm.stopPrank();
+    }
+
+    function _joinGameWithEthAsMary() public {
+        vm.startPrank(mary);
+        vm.deal(mary, 100e18);
+        r8r.joinGame{value: 2 ether}(allowedTestToken, 0, 1, 35); // mary joins the game with a prediction of 35 also
+        vm.stopPrank();
+    }
+
+    function _joinGameAsPlayerWithRating(uint256 gameId, address player, uint256 rating) public {
+        vm.startPrank(player);
+        vm.deal(player, 100e18);
+        r8r.joinGame{value: 1 ether}(allowedTestToken, 0, gameId, rating);
+        vm.stopPrank();
+    }
+
+    function _endGameWithRating(uint256 gameId, uint256 aiRating) public {
+        vm.startPrank(ai);
+        r8r.endGame(gameId, aiRating); // 35 == same score as user predicted
         vm.stopPrank();
     }
 }

@@ -174,15 +174,16 @@ contract R8R is Ownable, ReentrancyGuard {
         // set gameEnded to true so nobody else can join
         games[_gameId].gameEnded = true;
 
+        // no winners array
+        address[] memory noWinnersOfGame = new address[](1);
+        noWinnersOfGame[0] = address(0);
+
         // loop over player ratings and...
         for (uint256 i = 0; i < games[_gameId].numberOfPlayersInGame; i++) {
             // ...compare each player rating to the AI one
             if (games[_gameId].playerAddressesToRatings[games[_gameId].playerKeys[i]] == _aiRating) {
                 // store any winners in the winners array
                 games[_gameId].winners.push(games[_gameId].playerKeys[i]);
-            } else {
-                games[_gameId].winners.push(address(0)); // end game if no winners
-                emit GameEnded(games[_gameId].winners, 0, _gameId);
             }
         }
 
@@ -190,16 +191,21 @@ contract R8R is Ownable, ReentrancyGuard {
         if (prizePool == 0) {
             revert Error__PrizePoolIsEmpty();
         }
-        uint256 payoutPerWinner = prizePool / games[_gameId].winners.length;
-        prizePool = 0; // prizePool reset to zero after pot is won
 
-        // send ether to winners
-        for (uint256 j = 0; j < games[_gameId].winners.length; j++) {
-            (bool sent,) = payable(games[_gameId].winners[j]).call{value: payoutPerWinner}("");
-            require(sent, "Payout to winner failed");
+        if (games[_gameId].winners.length == 0) {
+            emit GameEnded(noWinnersOfGame, 0, _gameId);
+        } else {
+            uint256 payoutPerWinner = prizePool / games[_gameId].winners.length;
+            prizePool = 0; // prizePool reset to zero after pot is won
+
+            // send ether to winners
+            for (uint256 j = 0; j < games[_gameId].winners.length; j++) {
+                (bool sent,) = payable(games[_gameId].winners[j]).call{value: payoutPerWinner}("");
+                require(sent, "Payout to winner failed");
+            }
+
+            emit GameEnded(games[_gameId].winners, payoutPerWinner, _gameId);
         }
-
-        emit GameEnded(games[_gameId].winners, payoutPerWinner, _gameId);
     }
 
     // =========================
