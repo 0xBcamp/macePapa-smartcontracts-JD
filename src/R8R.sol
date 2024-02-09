@@ -67,10 +67,10 @@ contract R8R is Ownable, ReentrancyGuard {
         // increment gameId
         gameId = gameId + 1;
 
-        // Create new Game struct
+        // Create new Game struct in games mapping
         Game storage game = games[gameId];
 
-        // add new game to game mappings indexed by gameId
+        // assign values to variables in the game
         game.gameEntryPriceInEth = gameEntryPriceInEth;
         game.gameId = gameId;
         game.gameEntryPriceInEth = 1e18;
@@ -87,7 +87,7 @@ contract R8R is Ownable, ReentrancyGuard {
         payable
         nonReentrant
     {
-        // require(games[_gameId].gameEnded == false, "The selected game has ended");
+        require(games[_gameId].gameEnded == false, "The selected game has ended");
 
         if (msg.value > 0) {
             _joinGameWithEth(_token, _gameId, _playerRating);
@@ -121,7 +121,7 @@ contract R8R is Ownable, ReentrancyGuard {
 
         // Effects
         games[_gameId].playerAddressesToRatings[msg.sender] = _playerRating; // Map player address to their rating within the selected game
-        games[_gameId].gameBalance += ethValueSentMinusRefund; // calc value of msg.value - refund amount
+        games[_gameId].gameBalance += ethValueSentMinusRefund;
         games[_gameId].numberOfPlayersInGame += 1;
         games[_gameId].playerKeys.push(msg.sender);
         prizePool += ethValueSentMinusRefund;
@@ -193,9 +193,10 @@ contract R8R is Ownable, ReentrancyGuard {
         }
 
         if (games[_gameId].winners.length == 0) {
+            // if there are no winners... that's all folks!
             emit GameEnded(noWinnersOfGame, 0, _gameId);
         } else {
-            uint256 payoutPerWinner = prizePool / games[_gameId].winners.length;
+            uint256 payoutPerWinner = prizePool / games[_gameId].winners.length; // divided the prizePool by the number of winners
             prizePool = 0; // prizePool reset to zero after pot is won
 
             // send ether to winners

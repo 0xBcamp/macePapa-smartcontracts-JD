@@ -354,6 +354,18 @@ contract R8RTest is Test {
         assertEq(gameEnded, false);
     }
 
+    function testJoinGame_WithEth_CannotJoinGameIfGameHasEnded() public {
+        _createGameAsAi(); // Game with gameId 1 created
+        _joinGameWithEthAsMary();
+
+        vm.startPrank(ai);
+        r8r.endGame(1, 35); // gameEnded == true
+        vm.stopPrank();
+
+        vm.expectRevert("The selected game has ended");
+        _joinGameWithEth(); // user tries to join gameId 1, expect error
+    }
+
     // ======================
     // === END GAME TESTS ===
     // ======================
