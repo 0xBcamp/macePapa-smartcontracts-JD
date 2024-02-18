@@ -37,7 +37,7 @@ contract R8R is Ownable, ReentrancyGuard {
 
     event GameCreated(uint256 indexed gameId, uint256 endTimestamp, uint256 gameEntryFee, uint256 prizePool);
     event PlayerJoinedGame(address indexed player, uint256 indexed gameId, uint256 playerRating, address token);
-    event GameEnded(address[] indexed winners, uint256 payoutPerWinner, uint256 indexed gameId);
+    event GameEnded(address[] indexed winners, uint256 payoutPerWinner, uint256 indexed gameId, uint256 aiRating);
     event GameEndedTest(address indexed winner, uint256 payoutPerWinner, uint256 indexed gameId);
 
     // ==============
@@ -174,30 +174,29 @@ contract R8R is Ownable, ReentrancyGuard {
         // set gameEnded to true so nobody else can join
         games[_gameId].gameEnded = true;
 
-        // no winners array
-        address[] memory noWinnersOfGame = new address[](1);
-        noWinnersOfGame[0] = address(0);
-
-        // loop over player ratings and...
-        for (uint256 i = 0; i < games[_gameId].numberOfPlayersInGame; i++) {
-            // ...compare each player rating to the AI one
-            if (games[_gameId].playerAddressesToRatings[games[_gameId].playerKeys[i]] == _aiRating) {
-                // store any winners in the winners array
-                games[_gameId].winners.push(games[_gameId].playerKeys[i]);
-            }
-        }
-
         // prize pool / winners
         if (prizePool == 0) {
             revert Error__PrizePoolIsEmpty();
         }
 
         if (games[_gameId].winners.length == 0) {
+            // no winners array
+            address[] memory noWinnersOfGame = new address[](1);
+            noWinnersOfGame[0] = address(0);
             // if there are no winners... that's all folks!
-            emit GameEnded(noWinnersOfGame, 0, _gameId);
+            emit GameEnded(noWinnersOfGame, 0, _gameId, _aiRating);
         } else {
             uint256 payoutPerWinner = prizePool / games[_gameId].winners.length; // divided the prizePool by the number of winners
             prizePool = 0; // prizePool reset to zero after pot is won
+
+            // loop over player ratings and...
+            for (uint256 i = 0; i < games[_gameId].numberOfPlayersInGame; i++) {
+                // ...compare each player rating to the AI one
+                if (games[_gameId].playerAddressesToRatings[games[_gameId].playerKeys[i]] == _aiRating) {
+                    // store any winners in the winners array
+                    games[_gameId].winners.push(games[_gameId].playerKeys[i]);
+                }
+            }
 
             // send ether to winners
             for (uint256 j = 0; j < games[_gameId].winners.length; j++) {
@@ -205,7 +204,7 @@ contract R8R is Ownable, ReentrancyGuard {
                 require(sent, "Payout to winner failed");
             }
 
-            emit GameEnded(games[_gameId].winners, payoutPerWinner, _gameId);
+            emit GameEnded(games[_gameId].winners, payoutPerWinner, _gameId, _aiRating);
         }
     }
 
